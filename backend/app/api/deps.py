@@ -44,7 +44,7 @@ async def current_user(request: Request, db: CurrentSession) -> User:
     sess = (await db.execute(stmt)).scalar_one_or_none()
     if sess is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid session")
-    if sess.expires_at.replace(tzinfo=None) < dt.datetime.utcnow():
+    if sess.expires_at.replace(tzinfo=None) < dt.datetime.now(dt.timezone.utc).replace(tzinfo=None):
         await db.delete(sess)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
     user = await db.get(User, sess.user_id)
