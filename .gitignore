@@ -30,3 +30,6 @@ data/
 .vscode/
 .DS_Store
 *.log
+
+# Backend runtime
+data/
