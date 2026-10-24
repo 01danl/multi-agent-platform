@@ -1,7 +1,7 @@
 # Implementation Status
 
 Single source of truth for what works, what does not, and what is next.
-Last updated: 2026-10-24 (end of Phase 2).
+Last updated: 2026-10-24 (end of Phase 3).
 
 ## Phase 1 — Working AI chat platform: ✅ COMPLETE
 
@@ -125,11 +125,23 @@ Last updated: 2026-10-24 (end of Phase 2).
 - Vector search is Python cosine over SQLite JSON (fine ≤ tens of thousands
   of chunks); Qdrant adapter later.
 
-## Phase 3 — Multi-Agent: ⬜ NOT STARTED
+## Phase 3 — Multi-Agent: ✅ COMPLETE
 
-Specialized agents, coordinator + `SubAgent` declarations, parallel
-delegation, depth/duration limits, subagent event streaming
-(`subgraphs=True`).
+- `agents.delegation_targets` (own agents only; self/foreign/unknown ids
+  rejected with 422) + Alembic migration.
+- Runner resolves targets into typed Deep Agents `SubAgent` declarations:
+  the specialist keeps its own model (falls back to parent's if its provider
+  is unconfigured), tools, system prompt and knowledge bases; depth is 1 by
+  construction (subagents never get the `task` tool — no runtime cycles).
+- Stale/deleted targets skipped safely at run time.
+- Fake provider exercises the real `task()` path for keyless demos/tests.
+- Agent Studio: "Can delegate to" chips.
+- Tests: full coordinator→specialist→calculator flow over SSE (events,
+  transcript, trace), target validation, deleted-target safety, spec
+  resolution. **55 backend tests green**; browser-verified delegation flow.
+
+Known limitation: run usage counts the parent graph's model calls only —
+subagent turns are not yet aggregated (documented in 09-multi-agent).
 
 ## Phase 4 — Integrations & Automation: ⬜ NOT STARTED
 
@@ -145,8 +157,8 @@ observability, CI/CD (GitHub Actions), health/readiness probes beyond
 
 ## Next steps (suggested order)
 
-1. Phase 3 — multi-agent: custom `SubAgent` declarations, coordinator agent,
-   subagent event streaming (`subgraphs=True`), delegation limits.
-2. Checkpoint GC for deleted conversations + failed-ingestion retry (small).
-3. GitHub Actions workflow running the existing test/lint/typecheck matrix.
-4. Frontend code-splitting + keyboard shortcuts polish.
+1. Phase 4 — MCP client (external tool servers, per-agent allowlists) and
+   scheduler (APcheduler jobs through the same execution service).
+2. Subagent usage aggregation + `subgraphs=True` inner-tool streaming.
+3. Checkpoint GC for deleted conversations + failed-ingestion retry (small).
+4. GitHub Actions workflow running the existing test/lint/typecheck matrix.

@@ -10,9 +10,9 @@ provider routing, tool registry, limits, and observability.
 
 ## Status
 
-**Phase 1 + 2 complete** — working AI chat platform (streaming, tool calling,
-persistent conversations, execution inspector) plus long-term memory and
-document-based RAG with source citations. See
+**Phases 1–3 complete** — working AI chat platform (streaming, tool calling,
+persistent conversations, execution inspector), long-term memory, document
+RAG with citations, and multi-agent delegation. See
 [docs/implementation-status.md](docs/implementation-status.md) for exactly
 what works and what is planned (memory/RAG, multi-agent, MCP, scheduler).
 
@@ -72,11 +72,14 @@ Or via make: `make dev-backend` / `make dev-frontend` / `make test`.
 - **Knowledge bases / RAG** (Phase 2) — upload PDF/TXT/MD, automatic parsing,
   chunking and embeddings (OpenAI when keyed, deterministic local provider
   otherwise), `knowledge_search` tool with `[file#chunk]` citations.
+- **Multi-agent delegation** (Phase 3) — any agent can be given specialists
+  (own model/tools/prompt/KBs) via Deep Agents subagents; the `task` tool
+  appears in traces; depth 1 by construction.
 
 ## Verification
 
 ```bash
-make test        # backend: 51 tests (unit + SSE/RAG end-to-end with fake provider)
+make test        # backend: 55 tests (unit + SSE/RAG/delegation end-to-end with fake provider)
 make lint        # ruff + frontend lint
 make typecheck   # mypy + tsc
 ```
@@ -97,6 +100,7 @@ later). Full docs in [docs/architecture/](docs/architecture/):
 - [06 Tool execution](docs/architecture/06-tool-execution.md)
 - [07 Memory system](docs/architecture/07-memory-system.md)
 - [08 RAG pipeline](docs/architecture/08-rag-pipeline.md)
+- [09 Multi-agent](docs/architecture/09-multi-agent.md)
 - [10 Database design](docs/architecture/10-database-design.md)
 - [11 Streaming](docs/architecture/11-streaming.md)
 - [12 Security](docs/architecture/12-security.md)
@@ -116,8 +120,8 @@ provider keys, model catalogs, run limits (`MAX_MODEL_CALLS_PER_RUN`,
   marked `failed(server_restarted)`.
 - SQLite only (fine for a small self-hosted install); PostgreSQL/Qdrant
   adapters are Phase 5.
-- Scheduling, MCP, and subagent delegation are not implemented yet
-  (Phases 3–4).
+- Scheduling and MCP are not implemented yet (Phase 4); subagent token usage
+  is not aggregated into run totals yet.
 - Real-provider integration (OpenAI/OpenRouter) is exercised through the same
   `ChatOpenAI` path as tests but has not been verified against a paid account
   in CI; the fake provider covers the execution machinery. RAG without an
