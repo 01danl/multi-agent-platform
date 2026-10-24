@@ -51,6 +51,8 @@ class FakePlatformModel(BaseChatModel):
             result = last.content if isinstance(last.content, str) else str(last.content)
             if last.name == "calculator":
                 content = f"The calculator returned {result}."
+            elif last.name == "task":
+                content = f"The specialist agent reported: {result[:400]}"
             else:
                 preview = result[:400]
                 content = f"Based on the retrieved sources: {preview}"
@@ -69,6 +71,27 @@ class FakePlatformModel(BaseChatModel):
                     usage_metadata=usage,
                 )
                 return ChatResult(generations=[ChatGeneration(message=msg)])
+
+            if "task" in self._bound_tool_names:
+                import re
+
+                match = re.search(r"delegate to ([a-z0-9-]+)", text.lower())
+                if match:
+                    msg = AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "task",
+                                "args": {
+                                    "subagent_type": match.group(1),
+                                    "description": text,
+                                },
+                                "id": "fake_task_1",
+                            }
+                        ],
+                        usage_metadata=usage,
+                    )
+                    return ChatResult(generations=[ChatGeneration(message=msg)])
 
             if "knowledge_search" in self._bound_tool_names and "?" in text:
                 msg = AIMessage(

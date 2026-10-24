@@ -71,6 +71,8 @@ class Agent(Base):
     enabled_tools: Mapped[list[str]] = mapped_column(JSON, default=list)
     memory_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     knowledge_base_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Agent ids this agent may delegate to via the `task` tool (same owner).
+    delegation_targets: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

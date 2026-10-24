@@ -59,6 +59,8 @@ class AgentRuntimeConfig:
     enabled_tools: tuple[str, ...] = field(default_factory=tuple)
     memory_enabled: bool = False
     knowledge_base_ids: tuple[str, ...] = field(default_factory=tuple)
+    delegation_target_ids: tuple[str, ...] = field(default_factory=tuple)
+    delegation_specs: tuple[DelegationSpec, ...] = field(default_factory=tuple)
 
     @classmethod
     def from_agent(cls, agent) -> AgentRuntimeConfig:
@@ -74,7 +76,23 @@ class AgentRuntimeConfig:
             enabled_tools=tuple(agent.enabled_tools or []),
             memory_enabled=bool(agent.memory_enabled),
             knowledge_base_ids=tuple(str(kb) for kb in agent.knowledge_base_ids or []),
+            delegation_target_ids=tuple(str(t) for t in agent.delegation_targets or []),
         )
+
+
+@dataclass(frozen=True)
+class DelegationSpec:
+    """A resolvable delegation target: another agent the parent may `task`.
+
+    Deep Agents gets this converted into a SubAgent declaration at graph
+    build time; the target keeps its own model, tools, prompt and KB scope.
+    Delegation depth is 1 by construction: subagents never receive the
+    `task` tool themselves.
+    """
+
+    slug: str
+    description: str
+    config: AgentRuntimeConfig
 
 
 class RunError(Exception):
@@ -95,6 +113,12 @@ def _text_of(content: object) -> str:
                 parts.append(str(block.get("text", "")))
         return "".join(parts)
     return ""
+
+
+def _slugify(name: str) -> str:
+    import re
+
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
 def _serialize_tool_calls(msg: AIMessage | AIMessageChunk) -> list[dict]:
@@ -128,21 +152,70 @@ class AgentRunner:
     # ------------------------------------------------------------------ graph
 
     async def _effective_config(self, config: AgentRuntimeConfig) -> AgentRuntimeConfig:
-        """Compose the system prompt with saved memories when enabled."""
+        """Resolve run-time composition: memory preamble + delegation targets."""
         import dataclasses
 
-        if not config.memory_enabled or self._memory_store is None:
-            return config
-        from app.memory.service import MemoryStore
+        prompt = config.system_prompt
 
-        assert isinstance(self._memory_store, MemoryStore)
-        memories = await self._memory_store.list_for_agent(
-            owner_id=config.owner_id, agent_id=config.agent_id
+        if config.memory_enabled and self._memory_store is not None:
+            from app.memory.service import MemoryStore
+
+            assert isinstance(self._memory_store, MemoryStore)
+            memories = await self._memory_store.list_for_agent(
+                owner_id=config.owner_id, agent_id=config.agent_id
+            )
+            prompt += MemoryStore.build_preamble(memories)
+
+        specs = await self._resolve_delegation_specs(config)
+
+        return dataclasses.replace(
+            config,
+            system_prompt=prompt,
+            delegation_specs=specs,
         )
-        preamble = MemoryStore.build_preamble(memories)
-        if not preamble:
-            return config
-        return dataclasses.replace(config, system_prompt=config.system_prompt + preamble)
+
+    async def _resolve_delegation_specs(self, config: AgentRuntimeConfig) -> tuple[DelegationSpec, ...]:
+        """Load the agent's delegation targets (same owner) as SubAgent specs.
+
+        Unknown or foreign ids are skipped defensively — the API validates on
+        write, this guards against deleted targets and stale configs.
+        """
+        from sqlalchemy import select
+
+        from app.db.models import Agent
+
+        target_uuids: list[UUID] = []
+        for raw in config.delegation_target_ids:
+            try:
+                target_uuids.append(UUID(str(raw)))
+            except (ValueError, TypeError, AttributeError):
+                logger.warning("Skipping invalid delegation target id: %r", raw)
+        if not target_uuids:
+            return ()
+        async with self._sessions() as session:
+            rows = (
+                await session.execute(
+                    select(Agent).where(
+                        Agent.owner_id == config.owner_id, Agent.id.in_(target_uuids)
+                    )
+                )
+            ).scalars().all()
+        specs: list[DelegationSpec] = []
+        used_slugs: set[str] = set()
+        for agent in rows:
+            slug = _slugify(agent.name) or f"agent-{str(agent.id)[:8]}"
+            if slug in used_slugs:
+                slug = f"{slug}-{str(agent.id)[:4]}"
+            used_slugs.add(slug)
+            description = agent.description.strip() or f"Specialist agent: {agent.name}"
+            specs.append(
+                DelegationSpec(
+                    slug=slug,
+                    description=f"{description} (call the task tool with subagent_type='{slug}')",
+                    config=AgentRuntimeConfig.from_agent(agent),
+                )
+            )
+        return tuple(specs)
 
     def build_graph(self, config: AgentRuntimeConfig, tool_context: ToolContext):
         from deepagents import create_deep_agent
@@ -150,13 +223,44 @@ class AgentRunner:
 
         model = self._model_factory(config)
         tools = self._tools.build_tools(list(config.enabled_tools), tool_context)
+
+        from deepagents.middleware.subagents import SubAgent
+
+        subagents: list[SubAgent] = []
+        for spec in config.delegation_specs:
+            entry = SubAgent(
+                name=spec.slug,
+                description=spec.description,
+                tools=self._tools.build_tools(
+                    list(spec.config.enabled_tools), self._subagent_context(spec, tool_context)
+                ),
+                system_prompt=spec.config.system_prompt or "You are a helpful assistant.",
+            )
+            try:
+                entry["model"] = self._model_factory(spec.config)
+            except Exception:
+                logger.warning(
+                    "Delegation target %s has unconfigured provider %s; inheriting parent model",
+                    spec.slug,
+                    spec.config.model_provider,
+                )
+            subagents.append(entry)
+
         return create_deep_agent(
             model=model,
             tools=tools,
             system_prompt=config.system_prompt or "You are a helpful assistant.",
             middleware=[ModelCallLimitMiddleware(run_limit=self._settings.max_model_calls_per_run)],
             checkpointer=self._checkpointer,
+            subagents=subagents or None,
         )
+
+    def _subagent_context(self, spec: DelegationSpec, parent: ToolContext) -> ToolContext:
+        """Subagent tools run under the same run/user scope, but with the
+        target agent's own knowledge bases."""
+        from dataclasses import replace as dc_replace
+
+        return dc_replace(parent, agent_id=spec.config.agent_id, knowledge_base_ids=spec.config.knowledge_base_ids)
 
     # ------------------------------------------------------------------- run
 

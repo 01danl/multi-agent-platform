@@ -45,6 +45,7 @@ class AgentCreate(BaseModel):
     enabled_tools: list[str] = Field(default_factory=list)
     memory_enabled: bool = False
     knowledge_base_ids: list[str] = Field(default_factory=list)
+    delegation_targets: list[str] = Field(default_factory=list)
 
 
 class AgentUpdate(BaseModel):
@@ -58,6 +59,7 @@ class AgentUpdate(BaseModel):
     enabled_tools: list[str] | None = None
     memory_enabled: bool | None = None
     knowledge_base_ids: list[str] | None = None
+    delegation_targets: list[str] | None = None
 
 
 class AgentOut(BaseModel):
@@ -74,6 +76,7 @@ class AgentOut(BaseModel):
     enabled_tools: list[str]
     memory_enabled: bool
     knowledge_base_ids: list[str]
+    delegation_targets: list[str]
     created_at: datetime
     updated_at: datetime
 

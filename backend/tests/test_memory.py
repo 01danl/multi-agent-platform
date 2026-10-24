@@ -114,6 +114,7 @@ async def test_agent_without_memory_flag_gets_no_injection(user_client: AsyncCli
             "model_name": agent["model_name"], "temperature": agent["temperature"],
             "max_output_tokens": agent["max_output_tokens"], "enabled_tools": agent["enabled_tools"],
             "memory_enabled": agent["memory_enabled"], "knowledge_base_ids": agent["knowledge_base_ids"],
+            "delegation_targets": [],
         })()
     )
     assert config.memory_enabled is False

@@ -26,6 +26,22 @@ def _validate_provider(body: AgentCreate | AgentUpdate, providers: ModelProvider
         )
 
 
+async def _validate_delegation_targets(
+    body: AgentCreate | AgentUpdate, user, db, agent_id: str | None = None
+) -> None:
+    """Delegation targets must be agents owned by the same user (no cross-user,
+    no self-reference, no accidental cycles at the config level)."""
+    targets = body.delegation_targets
+    if not targets:
+        return
+    own_ids = {str(a.id) for a in (await db.execute(select(Agent).where(Agent.owner_id == user.id))).scalars()}
+    for target in targets:
+        if target == agent_id:
+            raise HTTPException(422, "An agent cannot delegate to itself")
+        if target not in own_ids:
+            raise HTTPException(422, f"Delegation target {target} is not one of your agents")
+
+
 @router.get("", response_model=list[AgentOut])
 async def list_agents(user: CurrentUser, db: CurrentSession) -> list[Agent]:
     result = await db.execute(
@@ -37,6 +53,7 @@ async def list_agents(user: CurrentUser, db: CurrentSession) -> list[Agent]:
 @router.post("", response_model=AgentOut, status_code=status.HTTP_201_CREATED)
 async def create_agent(body: AgentCreate, user: CurrentUser, db: CurrentSession, request: Request) -> Agent:
     _validate_provider(body, _providers(request))
+    await _validate_delegation_targets(body, user, db)
     agent = Agent(owner_id=user.id, **body.model_dump())
     db.add(agent)
     await db.flush()
@@ -51,9 +68,10 @@ async def get_agent(agent: OwnedAgent) -> Agent:
 
 @router.patch("/{agent_id}", response_model=AgentOut)
 async def update_agent(
-    body: AgentUpdate, agent: OwnedAgent, db: CurrentSession, request: Request
+    body: AgentUpdate, agent: OwnedAgent, user: CurrentUser, db: CurrentSession, request: Request
 ) -> Agent:
     _validate_provider(body, _providers(request))
+    await _validate_delegation_targets(body, user, db, agent_id=str(agent.id))
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(agent, field, value)
     db.add(agent)
