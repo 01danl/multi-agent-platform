@@ -141,3 +141,25 @@ class Message(Base):
     tool_call_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Memory(Base):
+    """Long-term memory: explicitly saved facts, preferences, project context.
+
+    agent_id NULL means a user-global memory; otherwise it is scoped to one
+    agent. Nothing is captured automatically — rows come from the API or the
+    agent's save_memory tool, both carrying source metadata.
+    """
+
+    __tablename__ = "memories"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    category: Mapped[str] = mapped_column(String(20), default="fact")  # preference | project | fact
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(20), default="manual")  # manual | agent
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

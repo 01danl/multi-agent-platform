@@ -72,6 +72,19 @@ def _safe_eval(node: ast.AST) -> float:
 
 
 @dataclass
+class ToolServices:
+    """Service handles available to tool implementations.
+
+    Kept optional so the pure built-ins (calculator, clock) never depend on
+    infrastructure; service-backed tools (memory, knowledge) resolve their
+    store through this object and fail with a clear error if absent.
+    """
+
+    memory_store: object | None = None  # app.memory.service.MemoryStore
+    knowledge_store: object | None = None  # app.knowledge.service.KnowledgeStore
+
+
+@dataclass
 class ToolContext:
     """Per-run context handed to tool factories."""
 
@@ -79,6 +92,7 @@ class ToolContext:
     agent_id: UUID
     conversation_id: UUID
     run_id: UUID
+    services: ToolServices | None = None
 
 
 def _calculator(expression: str) -> str:
@@ -171,6 +185,66 @@ def _build_registry() -> ToolRegistry:
     registry.register(ToolSpec("calculator", "Evaluate arithmetic expressions.", "builtin", lambda _ctx: calculator))
     registry.register(
         ToolSpec("current_datetime", "Current date and time in a timezone.", "builtin", lambda _ctx: current_datetime)
+    )
+
+    def _memory(ctx: ToolContext):
+        from app.memory.service import MemoryStore
+
+        store = ctx.services.memory_store if ctx.services else None
+        if not isinstance(store, MemoryStore):
+            raise RuntimeError("Memory is not available in this run")
+
+        @tool
+        async def save_memory(content: str, category: str = "fact") -> str:
+            """Persist a durable fact, preference, or project note for future conversations.
+
+            Only save information the user would expect you to remember.
+            Do not save secrets, passwords, or sensitive personal data.
+
+            Args:
+                content: The fact to remember, one concise sentence.
+                category: One of "preference", "project", "fact".
+            """
+            if category not in {"preference", "project", "fact"}:
+                return "Error: category must be preference, project, or fact."
+            memory = await store.save(
+                owner_id=ctx.user_id,
+                agent_id=ctx.agent_id,
+                category=category,
+                content=content,
+                conversation_id=ctx.conversation_id,
+                source="agent",
+            )
+            return f"Saved memory [{memory.category}]: {memory.content}"
+
+        @tool
+        async def recall_memory(query: str) -> str:
+            """Search previously saved memories relevant to a query.
+
+            Args:
+                query: What to look for, e.g. "preferred language" or "project deadline".
+            """
+            matches = await store.recall(
+                owner_id=ctx.user_id, agent_id=ctx.agent_id, query=query
+            )
+            if not matches:
+                return "No saved memories match this query."
+            lines = [f"[{m.category}] {m.content}" for m in matches]
+            return "\n".join(lines)
+
+        return [save_memory, recall_memory]
+
+    def _memory_save_factory(ctx: ToolContext):
+        return _memory(ctx)[0]
+
+    def _memory_recall_factory(ctx: ToolContext):
+        return _memory(ctx)[1]
+
+    registry.register(
+        ToolSpec("save_memory", "Persist a fact/preference for future conversations.", "memory", _memory_save_factory)
+    )
+    registry.register(
+        ToolSpec("recall_memory", "Search saved memories by keyword.", "memory", _memory_recall_factory)
     )
     return registry
 

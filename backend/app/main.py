@@ -21,7 +21,7 @@ from app.agents.providers import ModelProviderManager
 from app.agents.runner import AgentRunner
 from app.agents.runs import RunTaskRegistry
 from app.agents.tools import get_tool_registry
-from app.api import agents, auth, conversations, meta, runs
+from app.api import agents, auth, conversations, memories, meta, runs
 from app.config import Settings, get_settings
 from app.db.models import AgentRun
 from app.db.session import create_engine_from_settings, create_session_factory
@@ -79,12 +79,16 @@ async def lifespan(app: FastAPI):
         await cleanup_session.commit()
 
     async with AsyncSqliteSaver.from_conn_string(str(settings.checkpoint_db_path)) as checkpointer:
+        from app.memory.service import MemoryStore
+
+        memory_store = MemoryStore(session_factory)
         runner = AgentRunner(
             settings=settings,
             providers=providers,
             tool_registry=get_tool_registry(),
             checkpointer=checkpointer,
             session_factory=session_factory,
+            memory_store=memory_store,
         )
         app.state.settings = settings
         app.state.session_factory = session_factory
@@ -119,6 +123,7 @@ def create_app() -> FastAPI:
     app.include_router(agents.router)
     app.include_router(conversations.router)
     app.include_router(runs.router)
+    app.include_router(memories.router)
 
     @app.get("/api")
     async def root() -> dict:

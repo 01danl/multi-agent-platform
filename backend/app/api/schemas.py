@@ -44,6 +44,7 @@ class AgentCreate(BaseModel):
     max_output_tokens: int | None = Field(default=None, ge=1, le=200_000)
     enabled_tools: list[str] = Field(default_factory=list)
     memory_enabled: bool = False
+    knowledge_base_ids: list[str] = Field(default_factory=list)
 
 
 class AgentUpdate(BaseModel):
@@ -56,6 +57,7 @@ class AgentUpdate(BaseModel):
     max_output_tokens: int | None = Field(default=None, ge=1, le=200_000)
     enabled_tools: list[str] | None = None
     memory_enabled: bool | None = None
+    knowledge_base_ids: list[str] | None = None
 
 
 class AgentOut(BaseModel):
@@ -183,3 +185,24 @@ class ErrorOut(BaseModel):
     code: str
     message: str
     detail: str | None = None
+
+
+# ---------------------------------------------------------------- memories
+
+
+class MemoryCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+    category: str = Field(default="fact", pattern="^(preference|project|fact)$")
+    agent_id: uuid.UUID | None = None
+
+
+class MemoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    agent_id: uuid.UUID | None
+    category: str
+    content: str
+    source: str
+    conversation_id: uuid.UUID | None
+    created_at: datetime
