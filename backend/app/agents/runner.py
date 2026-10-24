@@ -59,7 +59,7 @@ class AgentRuntimeConfig:
     enabled_tools: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_agent(cls, agent) -> "AgentRuntimeConfig":
+    def from_agent(cls, agent) -> AgentRuntimeConfig:
         return cls(
             agent_id=agent.id,
             owner_id=agent.owner_id,
@@ -148,7 +148,7 @@ class AgentRunner:
         Cancellation: the caller cancels the task consuming this generator;
         we mark the run cancelled and stop.
         """
-        from app.db.models import AgentRun, Message, RunEvent
+        from app.db.models import AgentRun, RunEvent
 
         thread_id = f"conv:{conversation_id}"
         graph_config = {
@@ -208,7 +208,7 @@ class AgentRunner:
         except asyncio.CancelledError:
             await self._finalize(session, run_id, "cancelled", started, usage_totals)
             raise
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error = RunError("run_timeout", "The run exceeded the configured time limit.")
             yield await self._fail(session, run_id, error, started, usage_totals)
             return
@@ -290,7 +290,7 @@ class AgentRunner:
                 continue
             for msg in node_update.get("messages") or []:
                 if isinstance(msg, AIMessage):
-                    um = msg.usage_metadata or {}
+                    um: dict = dict(msg.usage_metadata or {})
                     usage_totals["input_tokens"] += um.get("input_tokens") or 0
                     usage_totals["output_tokens"] += um.get("output_tokens") or 0
                     usage_totals["total_tokens"] += um.get("total_tokens") or 0

@@ -69,7 +69,7 @@ class ModelProviderManager:
             self._specs["fake"] = _ProviderSpec("fake", "Fake (no external calls)", None, "not-a-real-key", ("fake-agent",))
 
     def provider_ids(self) -> list[str]:
-        ids = [pid for pid in ("openai", "openrouter", "custom", "fake") if pid in self._specs]
+        ids: list[str] = [pid for pid in ("openai", "openrouter", "custom", "fake") if pid in self._specs]
         return ids
 
     def list_providers(self) -> list[ProviderInfo]:
@@ -95,7 +95,7 @@ class ModelProviderManager:
             return bool(spec.api_key and spec.base_url)
         return bool(spec.api_key)
 
-    def build_model(self, config) -> "BaseChatModel":
+    def build_model(self, config) -> BaseChatModel:
         """Build a chat model from a plain agent runtime config.
 
         Raises:

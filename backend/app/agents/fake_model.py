@@ -22,7 +22,7 @@ class FakePlatformModel(BaseChatModel):
     def _llm_type(self) -> str:
         return "fake-platform-model"
 
-    def bind_tools(self, tools: Any, **kwargs: Any) -> "FakePlatformModel":
+    def bind_tools(self, tools: Any, **kwargs: Any) -> FakePlatformModel:
         return self
 
     def _generate(
