@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     # stored hashed in the database.
     secret_key: str = "dev-insecure-secret-key-change-me"
     session_ttl_hours: int = 24 * 14
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # Comma-separated origins (pydantic-settings parses complex types as JSON,
+    # so list fields stay plain strings and are split in the properties below).
+    cors_origins: str = "http://localhost:5173"
 
     # --- Uploads (Phase 2+, reserved) ---------------------------------------
     max_upload_size_mb: int = 20
@@ -61,21 +63,33 @@ class Settings(BaseSettings):
     # Deterministic fake provider for tests / keyless local development.
     fake_provider_enabled: bool = False
 
-    # Catalog of suggested models per provider (free text always allowed).
-    openai_models: list[str] = Field(
-        default_factory=lambda: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"]
+    # Catalog of suggested models per provider (comma-separated; free text
+    # is always allowed in the agent editor).
+    openai_models: str = "gpt-4o-mini,gpt-4o,gpt-4.1-mini,gpt-4.1"
+    openrouter_models: str = (
+        "openai/gpt-4o-mini,anthropic/claude-3.5-sonnet,meta-llama/llama-3.3-70b-instruct"
     )
-    openrouter_models: list[str] = Field(
-        default_factory=lambda: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "meta-llama/llama-3.3-70b-instruct"]
-    )
-    custom_models: list[str] = Field(default_factory=list)
+    custom_models: str = ""
 
-    @field_validator("cors_origins", "openai_models", "openrouter_models", "custom_models", mode="before")
-    @classmethod
-    def _split_csv(cls, v: object) -> object:
-        if isinstance(v, str):
-            return [item.strip() for item in v.split(",") if item.strip()]
-        return v
+    @staticmethod
+    def _csv(value: str) -> list[str]:
+        return [item.strip() for item in value.split(",") if item.strip()]
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return self._csv(self.cors_origins)
+
+    @property
+    def openai_model_list(self) -> list[str]:
+        return self._csv(self.openai_models)
+
+    @property
+    def openrouter_model_list(self) -> list[str]:
+        return self._csv(self.openrouter_models)
+
+    @property
+    def custom_model_list(self) -> list[str]:
+        return self._csv(self.custom_models)
 
     @property
     def sqlite_path(self) -> Path:

@@ -44,21 +44,21 @@ class ModelProviderManager:
         self._s = settings
         self._specs: dict[str, _ProviderSpec] = {
             "openai": _ProviderSpec(
-                "openai", "OpenAI", None, settings.openai_api_key, tuple(settings.openai_models)
+                "openai", "OpenAI", None, settings.openai_api_key, tuple(settings.openai_model_list)
             ),
             "openrouter": _ProviderSpec(
                 "openrouter",
                 "OpenRouter",
                 "https://openrouter.ai/api/v1",
                 settings.openrouter_api_key,
-                tuple(settings.openrouter_models),
+                tuple(settings.openrouter_model_list),
             ),
             "custom": _ProviderSpec(
                 settings.custom_provider_name,
                 "OpenAI-compatible endpoint",
                 settings.custom_openai_base_url,
                 settings.custom_openai_api_key,
-                tuple(settings.custom_models),
+                tuple(settings.custom_model_list),
             ),
         }
         # Allow addressing the custom provider by its configured name as well.
