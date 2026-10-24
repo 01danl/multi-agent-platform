@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
-from app.agents.tools import ToolContext, get_tool_registry, _calculator, _current_datetime
-from uuid import uuid4
+from app.agents.tools import ToolContext, _calculator, _current_datetime, get_tool_registry
 
 
 @pytest.fixture

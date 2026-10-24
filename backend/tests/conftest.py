@@ -50,11 +50,20 @@ async def app(test_env):
 
 
 @pytest_asyncio.fixture(scope="session")
-async def client(app) -> AsyncIterator[AsyncClient]:
-    transport = ASGITransport(app=app)
+async def lifespan_app(app):
     async with app.router.lifespan_context(app):
-        async with AsyncClient(transport=transport, base_url="http://testserver") as c:
-            yield c
+        yield app
+
+
+@pytest_asyncio.fixture(scope="session")
+async def transport(lifespan_app) -> ASGITransport:
+    return ASGITransport(app=lifespan_app)
+
+
+@pytest_asyncio.fixture(scope="session")
+async def client(transport: ASGITransport) -> AsyncIterator[AsyncClient]:
+    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
+        yield c
 
 
 async def make_user(client: AsyncClient, email: str, password: str = "password123") -> AsyncClient:
@@ -76,14 +85,29 @@ def _next_email(prefix: str) -> str:
     return f"{prefix}-{_user_counter}@test.io"
 
 
-@pytest_asyncio.fixture
-async def user_client(client: AsyncClient) -> AsyncClient:
-    return await make_user(client, _next_email("user"))
+async def _make_user(transport: ASGITransport, email: str, password: str = "password123") -> AsyncClient:
+    """Register a user on a fresh client (own cookie jar), logged in."""
+    client = AsyncClient(transport=transport, base_url="http://testserver")
+    resp = await client.post(
+        "/api/auth/register",
+        json={"email": email, "name": "Test User", "password": password},
+    )
+    assert resp.status_code == 201, resp.text
+    return client
 
 
 @pytest_asyncio.fixture
-async def other_user_client(client: AsyncClient) -> AsyncClient:
-    return await make_user(client, _next_email("other"))
+async def user_client(transport: ASGITransport) -> AsyncIterator[AsyncClient]:
+    client = await _make_user(transport, _next_email("user"))
+    yield client
+    await client.aclose()
+
+
+@pytest_asyncio.fixture
+async def other_user_client(transport: ASGITransport) -> AsyncIterator[AsyncClient]:
+    client = await _make_user(transport, _next_email("other"))
+    yield client
+    await client.aclose()
 
 
 async def create_agent(client: AsyncClient, **overrides) -> dict:

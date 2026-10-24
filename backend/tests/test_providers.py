@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 from app.agents.providers import ModelProviderManager, ProviderError
 from app.config import Settings
 
@@ -11,7 +9,7 @@ from app.config import Settings
 def _settings(**overrides) -> Settings:
     base = {
         "openai_api_key": "sk-test",
-        "openrouter_api_key": None,
+        "openrouter_api_key": "or-test",
         "custom_openai_base_url": "https://llm.local/v1",
         "custom_openai_api_key": "local-key",
         "fake_provider_enabled": True,
@@ -21,8 +19,9 @@ def _settings(**overrides) -> Settings:
 
 
 def _cfg(provider: str, model: str = "m1"):
-    from app.agents.runner import AgentRuntimeConfig
     from uuid import uuid4
+
+    from app.agents.runner import AgentRuntimeConfig
 
     return AgentRuntimeConfig(
         agent_id=uuid4(),
@@ -37,7 +36,7 @@ def _cfg(provider: str, model: str = "m1"):
 
 
 def test_provider_listing():
-    mgr = ModelProviderManager(_settings())
+    mgr = ModelProviderManager(_settings(openrouter_api_key=None))
     infos = {p.id: p for p in mgr.list_providers()}
     assert infos["openai"].configured is True
     assert infos["openrouter"].configured is False

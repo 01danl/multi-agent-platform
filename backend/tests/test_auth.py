@@ -9,14 +9,14 @@ async def test_register_login_me_flow(user_client: AsyncClient):
     resp = await user_client.get("/api/auth/me")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["email"] == "user1@test.io"
+    assert body["email"].endswith("@test.io")
     assert "password" not in body and "password_hash" not in body
 
 
 async def test_register_duplicate_email(user_client: AsyncClient):
     resp = await user_client.post(
         "/api/auth/register",
-        json={"email": "user1@test.io", "name": "Dup", "password": "password123"},
+        json={"email": (await user_client.get("/api/auth/me")).json()["email"], "name": "Dup", "password": "password123"},
     )
     assert resp.status_code == 409
 
@@ -30,9 +30,10 @@ async def test_register_short_password(client: AsyncClient):
 
 
 async def test_login_wrong_password(user_client: AsyncClient):
+    email = (await user_client.get("/api/auth/me")).json()["email"]
     resp = await user_client.post(
         "/api/auth/login",
-        json={"email": "user1@test.io", "password": "wrong-password"},
+        json={"email": email, "password": "wrong-password"},
     )
     assert resp.status_code == 401
 
@@ -50,10 +51,11 @@ async def test_protected_endpoint_requires_auth(client: AsyncClient):
 
 
 async def test_login_after_logout(user_client: AsyncClient):
+    email = (await user_client.get("/api/auth/me")).json()["email"]
     await user_client.post("/api/auth/logout")
     resp = await user_client.post(
         "/api/auth/login",
-        json={"email": "user1@test.io", "password": "password123"},
+        json={"email": email, "password": "password123"},
     )
     assert resp.status_code == 200
     me = await user_client.get("/api/auth/me")
