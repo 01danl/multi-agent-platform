@@ -46,6 +46,7 @@ export interface Agent {
   enabled_tools: string[];
   memory_enabled: boolean;
   knowledge_base_ids: string[];
+  delegation_targets: string[];
   created_at: string;
   updated_at: string;
 }

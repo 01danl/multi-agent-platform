@@ -17,6 +17,7 @@ interface AgentDraft {
   enabled_tools: string[];
   memory_enabled: boolean;
   knowledge_base_ids: string[];
+  delegation_targets: string[];
 }
 
 const emptyDraft = (provider: string, model: string): AgentDraft => ({
@@ -30,6 +31,7 @@ const emptyDraft = (provider: string, model: string): AgentDraft => ({
   enabled_tools: [],
   memory_enabled: false,
   knowledge_base_ids: [],
+  delegation_targets: [],
 });
 
 export default function AgentsPage() {
@@ -95,6 +97,7 @@ export default function AgentsPage() {
           <AgentEditor
             key={editingId}
             agent={editing}
+            agents={agents ?? []}
             providers={providers ?? []}
             tools={tools ?? []}
             kbs={kbs ?? []}
@@ -162,12 +165,14 @@ export default function AgentsPage() {
 
 function AgentEditor({
   agent,
+  agents,
   providers,
   tools,
   kbs,
   onClose,
 }: {
   agent: Agent | null;
+  agents: Agent[];
   providers: ProviderInfo[];
   tools: ToolInfo[];
   kbs: Kb[];
@@ -191,6 +196,7 @@ function AgentEditor({
           enabled_tools: agent.enabled_tools,
           memory_enabled: agent.memory_enabled,
           knowledge_base_ids: agent.knowledge_base_ids,
+          delegation_targets: agent.delegation_targets ?? [],
         }
       : emptyDraft(firstProvider, firstModel),
   );
@@ -376,6 +382,47 @@ function AgentEditor({
         )}
         <p className="mt-1.5 text-[11px] text-muted">
           Attached bases are searchable by the knowledge_search tool.
+        </p>
+      </div>
+
+      <div className="mt-3.5">
+        <Label>Can delegate to</Label>
+        {agents.filter((a) => a.id !== agent?.id).length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {agents
+              .filter((a) => a.id !== agent?.id)
+              .map((a) => {
+                const on = draft.delegation_targets.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    title={a.description || a.name}
+                    onClick={() =>
+                      set(
+                        "delegation_targets",
+                        on
+                          ? draft.delegation_targets.filter((id) => id !== a.id)
+                          : [...draft.delegation_targets, a.id],
+                      )
+                    }
+                    className={
+                      "rounded-full border px-2.5 py-1 text-[11px] transition-colors " +
+                      (on
+                        ? "border-accent/50 bg-accent/10 text-accent"
+                        : "border-border text-muted hover:border-muted/50")
+                    }
+                  >
+                    {a.name}
+                  </button>
+                );
+              })}
+          </div>
+        ) : (
+          <p className="text-xs text-muted">Create more agents to enable delegation.</p>
+        )}
+        <p className="mt-1.5 text-[11px] text-muted">
+          The agent can call the task tool to send work to these specialists.
         </p>
       </div>
 
