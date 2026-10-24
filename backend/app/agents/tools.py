@@ -12,37 +12,62 @@ No tool here executes shell commands or touches the host filesystem.
 from __future__ import annotations
 
 import ast
+import math
 import operator
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Callable
+from datetime import UTC, datetime, timezone
 from uuid import UUID
 
 from langchain_core.tools import BaseTool
 
 # --- Allowed arithmetic operators for the calculator (safe AST evaluation) ---
-_OPS: dict[type[ast.expr], Callable] = {
+# Keys are ast.operator / ast.unaryop subclasses (not ast.expr subclasses).
+_OPS: dict[type, Callable[..., float]] = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
     ast.Mult: operator.mul,
     ast.Div: operator.truediv,
-    ast.Pow: operator.pow,
     ast.Mod: operator.mod,
     ast.USub: operator.neg,
     ast.UAdd: operator.pos,
     ast.FloorDiv: operator.floordiv,
 }
 
+# Guards against denial-of-service via huge exponents (e.g. 9 ** 9 ** 9).
+_MAX_EXPONENT = 4096
+_MAX_RESULT_DIGITS = 308
+_MAX_EXPRESSION_LENGTH = 500
 
-def _safe_eval(node: ast.expr) -> float:
+
+def _guarded_pow(base: float, exponent: float) -> float:
+    if abs(exponent) > _MAX_EXPONENT:
+        raise ValueError("Exponent too large")
+    log_base = math.log10(abs(base)) if base != 0 else 0.0
+    if log_base * abs(exponent) > _MAX_RESULT_DIGITS:
+        raise ValueError("Result would be too large")
+    return base**exponent
+
+
+def _safe_eval(node: ast.AST) -> float:
     if isinstance(node, ast.Expression):
         return _safe_eval(node.body)
     if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
         return node.value
-    if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
-        return _OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
-    if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS:
-        return _OPS[type(node.op)](_safe_eval(node.operand))
+    if isinstance(node, ast.BinOp):
+        left = _safe_eval(node.left)
+        right = _safe_eval(node.right)
+        if isinstance(node.op, ast.Pow):
+            return _guarded_pow(left, right)
+        op = _OPS.get(type(node.op))
+        if op is None:
+            raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+        return op(left, right)
+    if isinstance(node, ast.UnaryOp):
+        op = _OPS.get(type(node.op))
+        if op is None:
+            raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+        return op(_safe_eval(node.operand))
     raise ValueError(f"Unsupported expression element: {type(node).__name__}")
 
 
@@ -67,6 +92,8 @@ def _calculator(expression: str) -> str:
     Returns:
         The numeric result as a string.
     """
+    if len(expression) > _MAX_EXPRESSION_LENGTH:
+        raise ValueError("Expression too long")
     tree = ast.parse(expression, mode="eval")
     result = _safe_eval(tree)
     if abs(result) > 1e308:
@@ -86,13 +113,11 @@ def _current_datetime(timezone_name: str | None = None) -> str:
     """
     from zoneinfo import ZoneInfo
 
-    tz: timezone | ZoneInfo = ZoneInfo(timezone_name) if timezone_name else timezone.utc
     try:
-        now = datetime.now(tz)
+        tz: timezone | ZoneInfo = ZoneInfo(timezone_name) if timezone_name else UTC
+        return datetime.now(tz).isoformat()
     except Exception:
-        now = datetime.now(timezone.utc)
-        return now.isoformat()
-    return now.isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 @dataclass(frozen=True)
