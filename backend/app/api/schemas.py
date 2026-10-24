@@ -206,3 +206,34 @@ class MemoryOut(BaseModel):
     source: str
     conversation_id: uuid.UUID | None
     created_at: datetime
+
+
+# -------------------------------------------------------------- knowledge
+
+
+class KbCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=2000)
+
+
+class KbOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    description: str
+    created_at: datetime
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kb_id: uuid.UUID
+    filename: str
+    mime_type: str
+    size_bytes: int
+    status: str
+    error: str | None
+    chunk_count: int
+    created_at: datetime

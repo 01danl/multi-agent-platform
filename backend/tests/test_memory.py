@@ -85,8 +85,6 @@ async def test_memory_recall_keyword_scoring(user_client: AsyncClient):
             "/api/memories", json={"content": content, "category": category, "agent_id": aid}
         )
 
-    from app.config import get_settings
-    from app.db.session import create_engine_from_settings, create_session_factory
 
     engine = create_engine_from_settings(get_settings())
     factory = create_session_factory(engine)

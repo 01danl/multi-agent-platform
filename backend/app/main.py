@@ -21,7 +21,7 @@ from app.agents.providers import ModelProviderManager
 from app.agents.runner import AgentRunner
 from app.agents.runs import RunTaskRegistry
 from app.agents.tools import get_tool_registry
-from app.api import agents, auth, conversations, memories, meta, runs
+from app.api import agents, auth, conversations, knowledge, memories, meta, runs
 from app.config import Settings, get_settings
 from app.db.models import AgentRun
 from app.db.session import create_engine_from_settings, create_session_factory
@@ -79,9 +79,16 @@ async def lifespan(app: FastAPI):
         await cleanup_session.commit()
 
     async with AsyncSqliteSaver.from_conn_string(str(settings.checkpoint_db_path)) as checkpointer:
+        from app.knowledge.embeddings import build_embedding_provider
+        from app.knowledge.service import KnowledgeStore
         from app.memory.service import MemoryStore
 
         memory_store = MemoryStore(session_factory)
+        knowledge_store = KnowledgeStore(
+            session_factory,
+            embedding_provider=build_embedding_provider(settings),
+            settings=settings,
+        )
         runner = AgentRunner(
             settings=settings,
             providers=providers,
@@ -89,12 +96,14 @@ async def lifespan(app: FastAPI):
             checkpointer=checkpointer,
             session_factory=session_factory,
             memory_store=memory_store,
+            knowledge_store=knowledge_store,
         )
         app.state.settings = settings
         app.state.session_factory = session_factory
         app.state.providers = providers
         app.state.agent_runner = runner
         app.state.run_registry = RunTaskRegistry()
+        app.state.knowledge_store = knowledge_store
         logger.info("AI Agent Platform backend started (providers configured: %s)",
                     ", ".join(p.id for p in providers.list_providers() if p.configured) or "none")
         yield
@@ -124,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations.router)
     app.include_router(runs.router)
     app.include_router(memories.router)
+    app.include_router(knowledge.router)
 
     @app.get("/api")
     async def root() -> dict:

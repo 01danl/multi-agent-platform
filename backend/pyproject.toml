@@ -17,6 +17,7 @@ dependencies = [
     "langgraph[sqlite]>=1.2.16",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
+    "pypdf>=6.21.2",
     "python-multipart>=0.0.32",
     "sqlalchemy[asyncio]>=2.1.6",
     "tzdata>=2026.5",

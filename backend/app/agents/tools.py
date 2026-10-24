@@ -93,6 +93,7 @@ class ToolContext:
     conversation_id: UUID
     run_id: UUID
     services: ToolServices | None = None
+    knowledge_base_ids: tuple[str, ...] = ()
 
 
 def _calculator(expression: str) -> str:
@@ -234,6 +235,40 @@ def _build_registry() -> ToolRegistry:
 
         return [save_memory, recall_memory]
 
+    def _knowledge_factory(ctx: ToolContext):
+        from app.knowledge.service import KnowledgeStore
+
+        store = ctx.services.knowledge_store if ctx.services else None
+        if not isinstance(store, KnowledgeStore):
+            raise RuntimeError("Knowledge search is not available in this run")
+
+        @tool
+        async def knowledge_search(query: str) -> str:
+            """Search the attached knowledge bases for relevant passages.
+
+            Always ground answers about uploaded documents in this tool's
+            output and cite sources as [filename#chunk]. If nothing relevant
+            is returned, say so - never invent sources.
+
+            Args:
+                query: A focused search phrase, e.g. "refund policy deadline".
+            """
+            if not ctx.knowledge_base_ids:
+                return "No knowledge base is attached to this agent."
+            results = await store.search(
+                owner_id=ctx.user_id,
+                kb_ids=list(ctx.knowledge_base_ids),
+                query=query,
+            )
+            if not results:
+                return "No relevant passages found in the knowledge bases."
+            lines = []
+            for r in results:
+                lines.append(f"[{r.filename}#chunk{r.chunk_index}] (score {r.score:.2f})\n{r.content}")
+            return "\n\n".join(lines)
+
+        return knowledge_search
+
     def _memory_save_factory(ctx: ToolContext):
         return _memory(ctx)[0]
 
@@ -245,6 +280,14 @@ def _build_registry() -> ToolRegistry:
     )
     registry.register(
         ToolSpec("recall_memory", "Search saved memories by keyword.", "memory", _memory_recall_factory)
+    )
+    registry.register(
+        ToolSpec(
+            "knowledge_search",
+            "Full-text/semantic search over the agent's attached knowledge bases.",
+            "knowledge",
+            _knowledge_factory,
+        )
     )
     return registry
 

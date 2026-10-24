@@ -61,7 +61,7 @@ class AgentRuntimeConfig:
     knowledge_base_ids: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
-    def from_agent(cls, agent) -> "AgentRuntimeConfig":
+    def from_agent(cls, agent) -> AgentRuntimeConfig:
         return cls(
             agent_id=agent.id,
             owner_id=agent.owner_id,
@@ -114,6 +114,7 @@ class AgentRunner:
         session_factory: async_sessionmaker[AsyncSession],
         model_factory: ModelFactory | None = None,
         memory_store: object | None = None,
+        knowledge_store: object | None = None,
     ) -> None:
         self._settings = settings
         self._providers = providers
@@ -122,6 +123,7 @@ class AgentRunner:
         self._sessions = session_factory
         self._model_factory = model_factory or providers.build_model
         self._memory_store = memory_store
+        self._knowledge_store = knowledge_store
 
     # ------------------------------------------------------------------ graph
 
@@ -185,7 +187,11 @@ class AgentRunner:
             agent_id=config.agent_id,
             conversation_id=conversation_id,
             run_id=run_id,
-            services=ToolServices(memory_store=self._memory_store),
+            services=ToolServices(
+                memory_store=self._memory_store,
+                knowledge_store=self._knowledge_store,
+            ),
+            knowledge_base_ids=config.knowledge_base_ids,
         )
 
         started = time.monotonic()

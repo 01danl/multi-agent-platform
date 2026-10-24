@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/api/memories", tags=["memories"])
 async def list_memories(
     user: CurrentUser,
     db: CurrentSession,
-    agent_id: UUID | None = Query(default=None),
+    agent_id: Annotated[UUID | None, Query()] = None,
 ) -> list[Memory]:
     stmt = select(Memory).where(Memory.owner_id == user.id)
     if agent_id is not None:
