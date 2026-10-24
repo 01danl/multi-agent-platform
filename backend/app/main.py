@@ -13,13 +13,13 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.agents.providers import ModelProviderManager
-from app.agents.runs import RunTaskRegistry
 from app.agents.runner import AgentRunner
+from app.agents.runs import RunTaskRegistry
 from app.agents.tools import get_tool_registry
 from app.api import agents, auth, conversations, meta, runs
 from app.config import Settings, get_settings
@@ -34,8 +34,9 @@ logger = logging.getLogger("agent-platform")
 
 
 def _run_migrations() -> None:
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     alembic_cfg = Config("alembic.ini")
     alembic_cfg.set_main_option("script_location", "alembic")

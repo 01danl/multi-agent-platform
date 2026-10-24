@@ -7,7 +7,7 @@ state; these tables hold everything the UI lists, edits, and audits.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
@@ -25,7 +25,7 @@ from sqlalchemy.types import Uuid
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
