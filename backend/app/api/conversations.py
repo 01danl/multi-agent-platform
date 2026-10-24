@@ -24,8 +24,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.agents import events as ev
-from app.agents.runs import RunTaskRegistry
 from app.agents.runner import AgentRunner, AgentRuntimeConfig
+from app.agents.runs import RunTaskRegistry
 from app.api.deps import CurrentSession, CurrentUser, OwnedConversation
 from app.api.schemas import (
     ConversationCreate,
@@ -68,11 +68,12 @@ async def create_conversation(body: ConversationCreate, user: CurrentUser, db: C
     )
     db.add(conv)
     await db.flush()
+    await db.refresh(conv)
     return conv
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
-async def get_conversation(conv: OwnedConversation, db: CurrentSession) -> Conversation:
+async def get_conversation(conv: OwnedConversation, db: CurrentSession) -> ConversationDetail:
     messages = await db.execute(
         select(Message)
         .where(Message.conversation_id == conv.id)
@@ -91,6 +92,7 @@ async def update_conversation(
     conv.updated_at = utcnow()
     db.add(conv)
     await db.flush()
+    await db.refresh(conv)
     return conv
 
 

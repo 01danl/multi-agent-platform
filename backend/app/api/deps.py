@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
@@ -19,7 +20,7 @@ def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
 
 async def db_session(
     factory: Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)],
-) -> AsyncSession:
+) -> AsyncIterator[AsyncSession]:
     session = factory()
     try:
         yield session
@@ -44,7 +45,7 @@ async def current_user(request: Request, db: CurrentSession) -> User:
     sess = (await db.execute(stmt)).scalar_one_or_none()
     if sess is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid session")
-    if sess.expires_at.replace(tzinfo=None) < dt.datetime.now(dt.timezone.utc).replace(tzinfo=None):
+    if sess.expires_at.replace(tzinfo=None) < dt.datetime.now(dt.UTC).replace(tzinfo=None):
         await db.delete(sess)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session expired")
     user = await db.get(User, sess.user_id)

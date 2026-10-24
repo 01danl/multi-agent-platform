@@ -40,6 +40,7 @@ async def create_agent(body: AgentCreate, user: CurrentUser, db: CurrentSession,
     agent = Agent(owner_id=user.id, **body.model_dump())
     db.add(agent)
     await db.flush()
+    await db.refresh(agent)  # server-side defaults (created_at/updated_at)
     return agent
 
 
@@ -57,6 +58,7 @@ async def update_agent(
         setattr(agent, field, value)
     db.add(agent)
     await db.flush()
+    await db.refresh(agent)  # updated_at is a server-side onupdate
     return agent
 
 

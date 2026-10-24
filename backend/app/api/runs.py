@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -19,9 +20,9 @@ router = APIRouter(prefix="/api/runs", tags=["runs"])
 async def list_runs(
     user: CurrentUser,
     db: CurrentSession,
-    conversation_id: UUID | None = Query(default=None),
-    agent_id: UUID | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
+    conversation_id: Annotated[UUID | None, Query()] = None,
+    agent_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[AgentRun]:
     stmt = select(AgentRun).where(AgentRun.user_id == user.id)
     if conversation_id is not None:

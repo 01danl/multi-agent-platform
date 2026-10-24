@@ -36,7 +36,7 @@ async def _create_session(response: Response, user: User, db: CurrentSession) ->
         Session(
             token_hash=hash_token(token),
             user_id=user.id,
-            expires_at=dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=settings.session_ttl_hours),
+            expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=settings.session_ttl_hours),
         )
     )
     await db.flush()
