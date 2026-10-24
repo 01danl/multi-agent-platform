@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Bot, MessageSquarePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "@/services/api";
 import { Badge, Button, Card, EmptyState, Input, Label, Spinner, Textarea } from "@/components/ui";
-import type { Agent, Conversation, ProviderInfo, ToolInfo } from "@/types";
+import type { Agent, Conversation, Kb, ProviderInfo, ToolInfo } from "@/types";
 
 interface AgentDraft {
   name: string;
@@ -16,6 +16,7 @@ interface AgentDraft {
   max_output_tokens: number | null;
   enabled_tools: string[];
   memory_enabled: boolean;
+  knowledge_base_ids: string[];
 }
 
 const emptyDraft = (provider: string, model: string): AgentDraft => ({
@@ -28,6 +29,7 @@ const emptyDraft = (provider: string, model: string): AgentDraft => ({
   max_output_tokens: null,
   enabled_tools: [],
   memory_enabled: false,
+  knowledge_base_ids: [],
 });
 
 export default function AgentsPage() {
@@ -46,6 +48,10 @@ export default function AgentsPage() {
   const { data: tools } = useQuery({
     queryKey: ["tools"],
     queryFn: () => api.get<ToolInfo[]>("/api/tools"),
+  });
+  const { data: kbs } = useQuery({
+    queryKey: ["kbs"],
+    queryFn: () => api.get<Kb[]>("/api/knowledge"),
   });
 
   const deleteAgent = useMutation({
@@ -91,6 +97,7 @@ export default function AgentsPage() {
             agent={editing}
             providers={providers ?? []}
             tools={tools ?? []}
+            kbs={kbs ?? []}
             onClose={() => setEditingId(null)}
           />
         )}
@@ -157,11 +164,13 @@ function AgentEditor({
   agent,
   providers,
   tools,
+  kbs,
   onClose,
 }: {
   agent: Agent | null;
   providers: ProviderInfo[];
   tools: ToolInfo[];
+  kbs: Kb[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -181,6 +190,7 @@ function AgentEditor({
           max_output_tokens: agent.max_output_tokens,
           enabled_tools: agent.enabled_tools,
           memory_enabled: agent.memory_enabled,
+          knowledge_base_ids: agent.knowledge_base_ids,
         }
       : emptyDraft(firstProvider, firstModel),
   );
@@ -327,6 +337,60 @@ function AgentEditor({
           })}
         </div>
       </div>
+
+      <div className="mt-3.5">
+        <Label>Knowledge bases</Label>
+        {kbs.length === 0 ? (
+          <p className="text-xs text-muted">
+            No knowledge bases yet — create one under Knowledge, then attach it here.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {kbs.map((kb) => {
+              const on = draft.knowledge_base_ids.includes(kb.id);
+              return (
+                <button
+                  key={kb.id}
+                  type="button"
+                  title={kb.description || kb.name}
+                  onClick={() =>
+                    set(
+                      "knowledge_base_ids",
+                      on
+                        ? draft.knowledge_base_ids.filter((id) => id !== kb.id)
+                        : [...draft.knowledge_base_ids, kb.id],
+                    )
+                  }
+                  className={
+                    "rounded-full border px-2.5 py-1 text-[11px] transition-colors " +
+                    (on
+                      ? "border-accent/50 bg-accent/10 text-accent"
+                      : "border-border text-muted hover:border-muted/50")
+                  }
+                >
+                  {kb.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <p className="mt-1.5 text-[11px] text-muted">
+          Attached bases are searchable by the knowledge_search tool.
+        </p>
+      </div>
+
+      <label className="mt-3.5 flex cursor-pointer items-center gap-2 text-[13px]">
+        <input
+          type="checkbox"
+          checked={draft.memory_enabled}
+          onChange={(e) => set("memory_enabled", e.target.checked)}
+          className="size-3.5 accent-[var(--accent)]"
+        />
+        <span>
+          Memory: inject saved memories into the system prompt
+          <span className="ml-1 text-muted">(manage under Memory)</span>
+        </span>
+      </label>
 
       {error && (
         <p className="mt-3 rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">

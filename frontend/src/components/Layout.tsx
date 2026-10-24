@@ -30,7 +30,8 @@ const groups: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/chat", label: "Chat", icon: MessageSquare },
       { to: "/agents", label: "Agents", icon: Bot },
-      { to: "/knowledge", label: "Knowledge", icon: Database, comingSoon: true },
+      { to: "/knowledge", label: "Knowledge", icon: Database },
+      { to: "/memory", label: "Memory", icon: Brain },
       { to: "/automations", label: "Automations", icon: Clock, comingSoon: true },
     ],
   },

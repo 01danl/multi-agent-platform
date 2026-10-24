@@ -8,6 +8,8 @@ import AgentsPage from "@/features/agents/AgentsPage";
 import RunsPage from "@/features/runs/RunsPage";
 import ToolsPage from "@/features/meta/ToolsPage";
 import ProvidersPage from "@/features/meta/ProvidersPage";
+import KnowledgePage from "@/features/knowledge/KnowledgePage";
+import MemoryPage from "@/features/memory/MemoryPage";
 import { Spinner } from "@/components/ui";
 
 const queryClient = new QueryClient({
@@ -47,6 +49,8 @@ export default function App() {
               <Route path="chat" element={<ChatPage />} />
               <Route path="chat/:conversationId" element={<ChatPage />} />
               <Route path="agents" element={<AgentsPage />} />
+              <Route path="knowledge" element={<KnowledgePage />} />
+              <Route path="memory" element={<MemoryPage />} />
               <Route path="tools" element={<ToolsPage />} />
               <Route path="runs" element={<RunsPage />} />
               <Route path="providers" element={<ProvidersPage />} />

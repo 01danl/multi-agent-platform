@@ -105,3 +105,32 @@ export type ChatEvent =
   | { type: "run_completed"; data: { run_id: string; duration_ms: number; usage: RunUsage } }
   | { type: "run_failed"; data: { run_id: string; code: string; message: string } }
   | { type: "error"; data: { code: string; message: string } };
+
+export interface MemoryItem {
+  id: string;
+  agent_id: string | null;
+  category: string;
+  content: string;
+  source: string;
+  conversation_id: string | null;
+  created_at: string;
+}
+
+export interface Kb {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  kb_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  status: "pending" | "processing" | "ready" | "failed";
+  error: string | null;
+  chunk_count: number;
+  created_at: string;
+}
