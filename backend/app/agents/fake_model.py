@@ -26,7 +26,7 @@ class FakePlatformModel(BaseChatModel):
     def _llm_type(self) -> str:
         return "fake-platform-model"
 
-    def bind_tools(self, tools: Any, **kwargs: Any) -> "FakePlatformModel":
+    def bind_tools(self, tools: Any, **kwargs: Any) -> FakePlatformModel:
         names: list[str] = []
         for tool in tools:
             name = getattr(tool, "name", None) or getattr(tool, "__name__", "")

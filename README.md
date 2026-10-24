@@ -10,8 +10,9 @@ provider routing, tool registry, limits, and observability.
 
 ## Status
 
-**Phase 1 complete** — working AI chat platform with streaming, tool calling,
-persistent conversations, and an execution inspector. See
+**Phase 1 + 2 complete** — working AI chat platform (streaming, tool calling,
+persistent conversations, execution inspector) plus long-term memory and
+document-based RAG with source citations. See
 [docs/implementation-status.md](docs/implementation-status.md) for exactly
 what works and what is planned (memory/RAG, multi-agent, MCP, scheduler).
 
@@ -65,11 +66,17 @@ Or via make: `make dev-backend` / `make dev-frontend` / `make test`.
   an expandable event timeline (model calls, tool calls, failures).
 - **Multi-user** — agents, conversations, and runs are strictly isolated per
   owner (covered by tests).
+- **Long-term memory** (Phase 2) — explicit facts/preferences per user or
+  agent; `save_memory`/`recall_memory` tools; optional prompt injection for
+  memory-enabled agents.
+- **Knowledge bases / RAG** (Phase 2) — upload PDF/TXT/MD, automatic parsing,
+  chunking and embeddings (OpenAI when keyed, deterministic local provider
+  otherwise), `knowledge_search` tool with `[file#chunk]` citations.
 
 ## Verification
 
 ```bash
-make test        # backend: 34 tests (unit + SSE end-to-end with fake provider)
+make test        # backend: 51 tests (unit + SSE/RAG end-to-end with fake provider)
 make lint        # ruff + frontend lint
 make typecheck   # mypy + tsc
 ```
@@ -88,6 +95,8 @@ later). Full docs in [docs/architecture/](docs/architecture/):
 - [04 LangGraph / Deep Agents integration](docs/architecture/04-langgraph-deepagents.md)
 - [05 Request lifecycle](docs/architecture/05-request-lifecycle.md)
 - [06 Tool execution](docs/architecture/06-tool-execution.md)
+- [07 Memory system](docs/architecture/07-memory-system.md)
+- [08 RAG pipeline](docs/architecture/08-rag-pipeline.md)
 - [10 Database design](docs/architecture/10-database-design.md)
 - [11 Streaming](docs/architecture/11-streaming.md)
 - [12 Security](docs/architecture/12-security.md)
@@ -107,11 +116,12 @@ provider keys, model catalogs, run limits (`MAX_MODEL_CALLS_PER_RUN`,
   marked `failed(server_restarted)`.
 - SQLite only (fine for a small self-hosted install); PostgreSQL/Qdrant
   adapters are Phase 5.
-- Scheduling, MCP, knowledge bases, and subagent delegation are not
-  implemented yet (Phases 2–4).
+- Scheduling, MCP, and subagent delegation are not implemented yet
+  (Phases 3–4).
 - Real-provider integration (OpenAI/OpenRouter) is exercised through the same
   `ChatOpenAI` path as tests but has not been verified against a paid account
-  in CI; the fake provider covers the execution machinery.
+  in CI; the fake provider covers the execution machinery. RAG without an
+  OpenAI key falls back to keyword-grade local embeddings (by design).
 
 ## License
 

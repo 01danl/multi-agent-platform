@@ -1,7 +1,7 @@
 # Implementation Status
 
 Single source of truth for what works, what does not, and what is next.
-Last updated: 2026-10-24 (end of Phase 1).
+Last updated: 2026-10-24 (end of Phase 2).
 
 ## Phase 1 — Working AI chat platform: ✅ COMPLETE
 
@@ -78,12 +78,52 @@ Last updated: 2026-10-24 (end of Phase 1).
 - `frontend/dist` JS bundle ~665 kB (code-splitting is future polish).
 - Registration has no rate limiting / CAPTCHA (self-hosted MVP scope).
 
-## Phase 2 — Memory & Knowledge (RAG): ⬜ NOT STARTED
+## Phase 2 — Memory & Knowledge (RAG): ✅ COMPLETE
 
-Long-term memory store, workspace files, document upload (PDF/TXT/MD),
-chunking, embeddings, vector retrieval, knowledge base management, RAG tool
-with source citations, cross-user isolation tests. Short-term memory already
-exists via the checkpointer (see docs/architecture/07-memory-system.md).
+### Completed features (on top of Phase 1)
+
+**Long-term memory**
+- `memories` table (owner + optional agent scope, categories, source metadata).
+- Explicit CRUD API + Memory page (add/list/delete, agent scoping).
+- Agent tools `save_memory` / `recall_memory` (async, run-scoped, refuse bad
+  categories, prompted not to store secrets).
+- `memory_enabled` agents: stored memories appended to the system prompt
+  (capped, labeled section) before graph build.
+
+**Knowledge bases / RAG**
+- `knowledge_bases` / `knowledge_documents` / `document_chunks` tables.
+- Upload API: type whitelist (PDF/TXT/MD), size cap, background ingestion with
+  visible statuses (pending/processing/ready/failed + error text).
+- Parsing (pypdf + text), paragraph-aware chunking (1200/180 overlap).
+- Embedding abstraction: OpenAI `text-embedding-3-small` when keyed;
+  deterministic local token-hash provider for offline/tests (keyword-grade,
+  honestly labeled).
+- Retrieval: cosine in SQLite, owner-scoped SQL filtering, `[filename#chunk]`
+  citations with scores; honest empty results (no fabricated sources).
+- `knowledge_search` agent tool; agent ↔ KB attachment (`knowledge_base_ids`).
+- Frontend: Knowledge page (KB create/delete, upload with picker, status
+  polling, document delete), Memory page, agent studio KB chips + memory
+  toggle; fake provider exercises knowledge_search for keyless demos.
+
+### Tests executed (last run)
+
+- `uv run pytest -q` → **51 passed** (34 Phase-1 + 17 memory/knowledge:
+  CRUD & cross-user isolation, ingestion ready/failed paths, bad-type
+  rejection, exact-term retrieval quality + no-source behavior, direct tool
+  invocation with citations, embedding sanity, chunking).
+- `ruff check` / `mypy app` → clean; `npm run build` → clean.
+- Browser E2E: KB created, document uploaded (ready, 1 chunk), Docs Assistant
+  with attached KB answered "refund deadline" from the document with
+  `[aurora.txt#chunk0]` citation; memory saved via UI.
+
+### New known limitations
+
+- Embedding quality without an OpenAI key is keyword-grade (by design);
+  swap providers via `EMBEDDING` seam when needed.
+- Ingestion runs as an in-process background task; a crash mid-ingest leaves
+  the document failed (re-upload needed) — no durable job queue yet.
+- Vector search is Python cosine over SQLite JSON (fine ≤ tens of thousands
+  of chunks); Qdrant adapter later.
 
 ## Phase 3 — Multi-Agent: ⬜ NOT STARTED
 
@@ -105,8 +145,8 @@ observability, CI/CD (GitHub Actions), health/readiness probes beyond
 
 ## Next steps (suggested order)
 
-1. Checkpoint GC for deleted conversations (small, closes a known gap).
-2. Phase 2 spike: memory store schema + RAG ingestion pipeline behind the
-   existing `ToolContext` seam.
-3. Frontend code-splitting + keyboard shortcuts polish.
-4. GitHub Actions workflow running the existing test/lint/typecheck matrix.
+1. Phase 3 — multi-agent: custom `SubAgent` declarations, coordinator agent,
+   subagent event streaming (`subgraphs=True`), delegation limits.
+2. Checkpoint GC for deleted conversations + failed-ingestion retry (small).
+3. GitHub Actions workflow running the existing test/lint/typecheck matrix.
+4. Frontend code-splitting + keyboard shortcuts polish.
