@@ -61,6 +61,7 @@ class AgentRuntimeConfig:
     knowledge_base_ids: tuple[str, ...] = field(default_factory=tuple)
     delegation_target_ids: tuple[str, ...] = field(default_factory=tuple)
     delegation_specs: tuple[DelegationSpec, ...] = field(default_factory=tuple)
+    mcp_tool_refs: tuple[dict, ...] = field(default_factory=tuple)
 
     @classmethod
     def from_agent(cls, agent) -> AgentRuntimeConfig:
@@ -77,6 +78,7 @@ class AgentRuntimeConfig:
             memory_enabled=bool(agent.memory_enabled),
             knowledge_base_ids=tuple(str(kb) for kb in agent.knowledge_base_ids or []),
             delegation_target_ids=tuple(str(t) for t in agent.delegation_targets or []),
+            mcp_tool_refs=tuple(dict(r) for r in agent.mcp_tools or []),
         )
 
 
@@ -139,6 +141,7 @@ class AgentRunner:
         model_factory: ModelFactory | None = None,
         memory_store: object | None = None,
         knowledge_store: object | None = None,
+        mcp_service: object | None = None,
     ) -> None:
         self._settings = settings
         self._providers = providers
@@ -148,6 +151,7 @@ class AgentRunner:
         self._model_factory = model_factory or providers.build_model
         self._memory_store = memory_store
         self._knowledge_store = knowledge_store
+        self._mcp_service = mcp_service
 
     # ------------------------------------------------------------------ graph
 
@@ -217,12 +221,17 @@ class AgentRunner:
             )
         return tuple(specs)
 
-    def build_graph(self, config: AgentRuntimeConfig, tool_context: ToolContext):
+    def build_graph(
+        self,
+        config: AgentRuntimeConfig,
+        tool_context: ToolContext,
+        extra_tools: list | None = None,
+    ):
         from deepagents import create_deep_agent
         from langchain.agents.middleware import ModelCallLimitMiddleware
 
         model = self._model_factory(config)
-        tools = self._tools.build_tools(list(config.enabled_tools), tool_context)
+        tools = self._tools.build_tools(list(config.enabled_tools), tool_context) + list(extra_tools or [])
 
         from deepagents.middleware.subagents import SubAgent
 
@@ -311,17 +320,34 @@ class AgentRunner:
         async def load_run() -> AgentRun | None:
             return await session.get(AgentRun, run_id)
 
+        from contextlib import AsyncExitStack
+
+        mcp_stack = AsyncExitStack()
         try:
             config = await self._effective_config(config)
-            graph = self.build_graph(config, tool_context)
+            extra_tools = []
+            if config.mcp_tool_refs and self._mcp_service is not None:
+                from app.mcp.service import McpService, McpToolRef
+
+                assert isinstance(self._mcp_service, McpService)
+                refs = [r for r in (McpToolRef.parse(raw) for raw in config.mcp_tool_refs) if r]
+                if refs:
+                    try:
+                        extra_tools = await self._mcp_service.open_tools(
+                            mcp_stack, owner_id=config.owner_id, refs=refs
+                        )
+                    except Exception as exc:
+                        logger.warning("MCP tools unavailable, continuing without them: %s", exc)
+            graph = self.build_graph(config, tool_context, extra_tools=extra_tools)
         except Exception as exc:
+            await mcp_stack.aclose()
             yield await self._fail(session, run_id, exc, started, usage_totals)
             return
 
         yield ev.PlatformEvent(ev.RUN_STARTED, {"run_id": str(run_id), "agent_id": str(config.agent_id)})
 
         try:
-            async with asyncio.timeout(self._settings.run_timeout_seconds):
+            async with asyncio.timeout(self._settings.run_timeout_seconds), mcp_stack:
                 stream = graph.astream(
                     {"messages": [("user", user_message)]},
                     config=graph_config,

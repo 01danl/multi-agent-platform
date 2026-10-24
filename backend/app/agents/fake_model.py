@@ -21,6 +21,7 @@ class FakePlatformModel(BaseChatModel):
     """Stateless scripted model driving the real tool-calling loop."""
 
     _bound_tool_names: tuple[str, ...] = ()
+    _bound_tool_args: dict[str, tuple[str, ...]] = {}
 
     @property
     def _llm_type(self) -> str:
@@ -28,12 +29,21 @@ class FakePlatformModel(BaseChatModel):
 
     def bind_tools(self, tools: Any, **kwargs: Any) -> FakePlatformModel:
         names: list[str] = []
+        arg_keys: dict[str, tuple[str, ...]] = {}
         for tool in tools:
             name = getattr(tool, "name", None) or getattr(tool, "__name__", "")
-            if name:
-                names.append(name)
+            if not name:
+                continue
+            names.append(name)
+            try:
+                args = getattr(tool, "args", None)
+            except Exception:
+                args = None
+            if isinstance(args, dict):
+                arg_keys[name] = tuple(args.keys())
         clone = FakePlatformModel()
         clone._bound_tool_names = tuple(names)
+        clone._bound_tool_args = arg_keys
         return clone
 
     def _generate(
@@ -92,6 +102,25 @@ class FakePlatformModel(BaseChatModel):
                         usage_metadata=usage,
                     )
                     return ChatResult(generations=[ChatGeneration(message=msg)])
+
+            # MCP demo rule: "use mcp <tool> with A and B" -> call that tool
+            import re as _re
+
+            mcp_match = _re.search(r"use mcp ([a-z0-9_-]+) with (-?\d+) and (-?\d+)", text.lower())
+            if (
+                mcp_match
+                and mcp_match.group(1) in self._bound_tool_names
+                and self._bound_tool_args.get(mcp_match.group(1))
+            ):
+                tool_name = mcp_match.group(1)
+                keys = self._bound_tool_args[tool_name]
+                args = {keys[0]: int(mcp_match.group(2)), keys[1]: int(mcp_match.group(3))}
+                msg = AIMessage(
+                    content="",
+                    tool_calls=[{"name": tool_name, "args": args, "id": "fake_mcp_1"}],
+                    usage_metadata=usage,
+                )
+                return ChatResult(generations=[ChatGeneration(message=msg)])
 
             if "knowledge_search" in self._bound_tool_names and "?" in text:
                 msg = AIMessage(

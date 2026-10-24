@@ -73,6 +73,8 @@ class Agent(Base):
     knowledge_base_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     # Agent ids this agent may delegate to via the `task` tool (same owner).
     delegation_targets: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Allowed MCP tools: [{"server_id": "...", "tool": "..."}]
+    mcp_tools: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -107,6 +109,9 @@ class AgentRun(Base):
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     input_text: Mapped[str] = mapped_column(Text, default="")
+    automation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("automations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     usage: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -215,3 +220,60 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     embedding: Mapped[list[float]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Automation(Base):
+    """Scheduled agent task. Executed through the same AgentRunner path as
+    chat (acceptance: scheduled executions are inspectable like any run).
+
+    schedule_type: 'interval' (every N minutes) | 'daily' (at HH:MM).
+    Single-process scheduler: jobs live in the running server only.
+    """
+
+    __tablename__ = "automations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    prompt: Mapped[str] = mapped_column(Text)
+    schedule_type: Mapped[str] = mapped_column(String(12))  # interval | daily
+    interval_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    daily_at: Mapped[str | None] = mapped_column(String(5), nullable=True)  # HH:MM
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class McpServer(Base):
+    """External MCP tool server configuration (stdio or streamable HTTP).
+
+    No credential/env support in this iteration by design: commands and URLs
+    only, owner-scoped. Remote tool results are treated as untrusted content
+    by the runner's tool pipeline.
+    """
+
+    __tablename__ = "mcp_servers"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    transport: Mapped[str] = mapped_column(String(10))  # stdio | http
+    command: Mapped[str | None] = mapped_column(String(500), nullable=True)  # stdio
+    args_json: Mapped[list] = mapped_column(JSON, default=list)  # stdio
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True)  # http
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class McpToolSnapshot(Base):
+    """Last discovered tool list per server (for UI pickers without live
+    connections). Refreshed by POST /api/mcp/{id}/discover."""
+
+    __tablename__ = "mcp_tool_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    server_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mcp_servers.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

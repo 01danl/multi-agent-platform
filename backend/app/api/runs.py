@@ -22,6 +22,7 @@ async def list_runs(
     db: CurrentSession,
     conversation_id: Annotated[UUID | None, Query()] = None,
     agent_id: Annotated[UUID | None, Query()] = None,
+    automation_id: Annotated[UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[AgentRun]:
     stmt = select(AgentRun).where(AgentRun.user_id == user.id)
@@ -29,6 +30,8 @@ async def list_runs(
         stmt = stmt.where(AgentRun.conversation_id == conversation_id)
     if agent_id is not None:
         stmt = stmt.where(AgentRun.agent_id == agent_id)
+    if automation_id is not None:
+        stmt = stmt.where(AgentRun.automation_id == automation_id)
     stmt = stmt.order_by(AgentRun.started_at.desc()).limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())
